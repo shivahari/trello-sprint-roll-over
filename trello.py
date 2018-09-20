@@ -4,6 +4,7 @@ import json
 class trello():
     "Trello class"
     def __init__(self,key,token):
+        self.url = "https://api.trello.com/1/"
         self.auth_details = {'key':key,'token':token}
         self.boards = []
         self.account_name = None 
@@ -46,6 +47,42 @@ class trello():
             print str(e)
 
         return response
+
+    def get_board_card_details(self):
+        "Get the board details"
+        all_board_details = {}
+        board_details = {}
+        card_details = {}
+        boards = self.boards 
+        # Fields that are to be fetched for the board
+        fields = ['name','memberships','idOrganizations','dateLastActivity']
+        try:
+            # Iterate through the boards to get the details
+            for board in boards:
+                # Get the board details
+                board_url = self.url + '/boards/' + board
+                self.auth_details['fields'] = fields
+                get_board_details = requests.get(url=board_url,params=self.auth_details)
+                board_details =  get_board_details.json()
+                board_name = board_details['name']
+                # Delete the board name from the board details json to not include the name value again in all board details
+                del board_details['name']
+                # Delete the new fields added to the self.auth_details. To not encode them in url for getting cards
+                del self.auth_details['fields']
+                # Get the card details
+                card_url = board_url + '/cards'
+                get_card_details = requests.get(url=card_url,params=self.auth_details)
+                board_details['cards'] = get_card_details.json()
+                all_board_details[board_name] = board_details
+        except Exception as e:
+            print str(e)
+        print json.dumps(all_board_details,indent=4)
+
+    
+
+
+
+
 
 
 
