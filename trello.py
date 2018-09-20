@@ -1,6 +1,7 @@
 import requests
 import json,pickle
 import sh,sys,os
+import pandas as pd
 
 
 class trello():
@@ -17,8 +18,12 @@ class trello():
         self.account_details = {}
         self.all_board_details = {}
         self.all_card_details = {}
+        self.current_dir = os.path.abspath(os.path.dirname('__file__'))
+        self.data_dir = os.path.join(self.current_dir,'data')
+        self.board_dir = os.path.join(self.data_dir,'board')
+        self.card_dir = os.path.join(self.data_dir,'card')
+        self.get_account_details()
         if self.if_first_time():
-            self.get_account_details()
             self.get_board_card_details()
         self.create_data_dir()
 
@@ -75,14 +80,12 @@ class trello():
                 card_url = board_url + '/cards'
                 get_card_details = requests.get(url=card_url,params=self.auth_details)
                 card_details = get_card_details.json()
-                board_filename = './data/board/'+ board
+                board_filename = self.board_dir + '/'+ board
                 print board_filename
-                with open(board_filename,'w') as board_fileobj:
-                    pickle.dump(board,board_fileobj)
-                    board_fileobj.close()
                 card_names = []
-                card_sub_dir = './data/card/'+ board + '/'
-                os.mkdir(card_sub_dir)
+                card_sub_dir = self.card_dir + '/' + board + '/'
+                if not os.path.isdir(card_sub_dir):
+                    os.mkdir(card_sub_dir)
                 for card in card_details:
                     card_names.append(card['name'])
                     all_card_details[card['id']] = card
@@ -93,6 +96,9 @@ class trello():
                         card_filobj.close()
                 board_details['cards'] = card_names
                 all_board_details[board] = board_details 
+                with open(board_filename,'w') as board_fileobj:
+                    pickle.dump(board_details,board_fileobj)
+                    board_fileobj.close()
         except Exception as e:
             print str(e)
     
@@ -102,15 +108,13 @@ class trello():
         result_flag = True
         result_flag = self.create_data_dir()
         try:
-            if os.path.isdir('./data'):
-                board_dir = './data/board/'
-                check_if_board_exists = sh.ls(board_dir)
-                card_dir  = './data/card/'
-                check_if_card_exists = sh.ls(card_dir)
-                if not check_if_board_exists:
+            if os.path.isdir(self.data_dir):
+                check_if_board_exists = len(os.listdir(self.board_dir))
+                check_if_card_exists = len(os.listdir(self.card_dir))
+                if check_if_board_exists == 0 & check_if_card_exists == 0:
                     result_flag &= True
-                if not check_if_card_exists:
-                    result_flag &= True
+                else:
+                    result_flag &= False
         except Exception as e:
             result_flag &= False
             print str(e)
@@ -122,21 +126,52 @@ class trello():
         "Create a new dir for data"
         result_flag = False
         try:
-            current_dir = os.path.abspath(os.path.dirname('__file__'))
-            data_dir = os.path.join(current_dir,'data')
-            if not os.path.isdir(data_dir):
-                os.mkdir(data_dir)
-                board_dir = os.path.join(data_dir,'board')
-                card_dir = os.path.join(data_dir,'card')
-                if not os.path.isdir(board_dir):
-                    os.mkdir(board_dir)
-                if not os.path.isdir(card_dir):
-                    os.mkdir(card_dir)
+            if not os.path.isdir(self.data_dir):
+                os.mkdir(self.data_dir)
+                board_dir = os.path.join(self.data_dir,'board')
+                card_dir = os.path.join(self.data_dir,'card')
+                if not os.path.isdir(self.board_dir):
+                    os.mkdir(self.board_dir)
+                if not os.path.isdir(self.card_dir):
+                    os.mkdir(self.card_dir)
             result_flag = True
         except Exception as e:
             print str(e)
 
         return result_flag
 
+
+    def read_board_and_card_details(self):
+        "Read the board and card details"
+        board_details = {}
+        card_details = {}
+        try:
+            boards = os.listdir(self.board_dir)
+            print boards
+            
+            for board in boards:
+                file_name = os.path.join(self.board_dir,board)
+                print file_name
+                with open(file_name,'r') as file_obj:
+                    board_details[board] = pickle.load(file_obj)
+                    file_obj.close()
+                cards_dir = os.path.join(self.card_dir,board)
+                print cards_dir
+                cards = os.listdir(cards_dir)
+            for card in cards:
+                file_name = os.path.join(cards_dir,card)
+                print file_name
+                with open(file_name,'r') as file_obj:
+                    card_details[card] = pickle.load(file_obj)
+                    file_obj.close()
+            print json.dumps(board_details,indent=4)
+            print json.dumps(card_details,indent=4)
+
+        except Exception as e:
+            print str(e)
+
+
+    def get_late_active_boards(self):
+        "Get the board that was modified recently"
 
 
