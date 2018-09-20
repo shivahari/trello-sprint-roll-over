@@ -1,5 +1,7 @@
 import requests
-import json
+import json,pickle
+import sh,sys,os
+
 
 class trello():
     "Trello class"
@@ -13,6 +15,13 @@ class trello():
         self.organizations = None 
         self.member_type = None 
         self.account_details = {}
+        self.all_board_details = {}
+        self.all_card_details = {}
+        if self.if_first_time():
+            self.get_account_details()
+            self.get_board_card_details()
+        self.create_data_dir()
+
 
     def get_account_details(self):
         "Get the details of the user"
@@ -30,7 +39,6 @@ class trello():
                 self.member_type = response.json()['memberType']
                 self.account_details = {'boards':self.boards,'account_name':self.account_name,'fullname':self.fullname,'id':self.id,'organization':self.organizations,'member_type':self.member_type}
                 result_flag = True
-                print self.account_details
         except Exception as e:
             print str(e)
     
@@ -48,46 +56,87 @@ class trello():
 
         return response
 
+
     def get_board_card_details(self):
         "Get the board details"
         all_board_details = {}
+        all_card_details = {}
         board_details = {}
         card_details = {}
         boards = self.boards 
-        # Fields that are to be fetched for the board
-        fields = ['name','memberships','idOrganizations','dateLastActivity']
         try:
             # Iterate through the boards to get the details
             for board in boards:
                 # Get the board details
                 board_url = self.url + '/boards/' + board
-                self.auth_details['fields'] = fields
                 get_board_details = requests.get(url=board_url,params=self.auth_details)
                 board_details =  get_board_details.json()
-                board_name = board_details['name']
-                # Delete the board name from the board details json to not include the name value again in all board details
-                del board_details['name']
-                # Delete the new fields added to the self.auth_details. To not encode them in url for getting cards
-                del self.auth_details['fields']
                 # Get the card details
                 card_url = board_url + '/cards'
                 get_card_details = requests.get(url=card_url,params=self.auth_details)
-                board_details['cards'] = get_card_details.json()
-                all_board_details[board_name] = board_details
+                card_details = get_card_details.json()
+                board_filename = './data/board/'+ board
+                print board_filename
+                with open(board_filename,'w') as board_fileobj:
+                    pickle.dump(board,board_fileobj)
+                    board_fileobj.close()
+                card_names = []
+                card_sub_dir = './data/card/'+ board + '/'
+                os.mkdir(card_sub_dir)
+                for card in card_details:
+                    card_names.append(card['name'])
+                    all_card_details[card['id']] = card
+                    card_filename = card_sub_dir + card['id']
+                    print card_filename
+                    with open(card_filename,'w') as card_filobj:
+                        pickle.dump(card,card_filobj)
+                        card_filobj.close()
+                board_details['cards'] = card_names
+                all_board_details[board] = board_details 
         except Exception as e:
             print str(e)
-        print json.dumps(all_board_details,indent=4)
-
     
 
+    def if_first_time(self):
+        "Check if it is first time data being collected"
+        result_flag = True
+        result_flag = self.create_data_dir()
+        try:
+            if os.path.isdir('./data'):
+                board_dir = './data/board/'
+                check_if_board_exists = sh.ls(board_dir)
+                card_dir  = './data/card/'
+                check_if_card_exists = sh.ls(card_dir)
+                if not check_if_board_exists:
+                    result_flag &= True
+                if not check_if_card_exists:
+                    result_flag &= True
+        except Exception as e:
+            result_flag &= False
+            print str(e)
 
-
-
-
-
-
-
-
-
+        return result_flag
 
     
+    def create_data_dir(self):
+        "Create a new dir for data"
+        result_flag = False
+        try:
+            current_dir = os.path.abspath(os.path.dirname('__file__'))
+            data_dir = os.path.join(current_dir,'data')
+            if not os.path.isdir(data_dir):
+                os.mkdir(data_dir)
+                board_dir = os.path.join(data_dir,'board')
+                card_dir = os.path.join(data_dir,'card')
+                if not os.path.isdir(board_dir):
+                    os.mkdir(board_dir)
+                if not os.path.isdir(card_dir):
+                    os.mkdir(card_dir)
+            result_flag = True
+        except Exception as e:
+            print str(e)
+
+        return result_flag
+
+
+
