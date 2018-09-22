@@ -34,9 +34,10 @@ class trello():
         get_account_details_url = 'https://api.trello.com/1/members/me/'
         try:
             response = self.get(url=get_account_details_url,params=self.auth_details)
-            print response
+            #print response
             if response.status_code == 200:
                 self.boards = response.json()['idBoards']
+                #self.organizations = response.json()['organization']
                 self.account_name = response.json()['username']
                 self.fullname = response.json()['fullName']
                 self.id = response.json()['id']
@@ -44,6 +45,7 @@ class trello():
                 self.member_type = response.json()['memberType']
                 self.account_details = {'boards':self.boards,'account_name':self.account_name,'fullname':self.fullname,'id':self.id,'organization':self.organizations,'member_type':self.member_type}
                 result_flag = True
+
         except Exception as e:
             print str(e)
     
@@ -55,7 +57,7 @@ class trello():
         response = None
         try:
             response = requests.get(url=url,params=params,data=data,headers=headers)
-            print response
+            #print response
         except Exception as e:
             print str(e)
 
@@ -171,7 +173,129 @@ class trello():
             print str(e)
 
 
-    def get_late_active_boards(self):
-        "Get the board that was modified recently"
+    def get_boards(self):
+        "Get the boards"
+        board_details = {}
+        try:
+            boards = os.listdir(self.board_dir)
+            for board in boards:
+                file_name = os.path.join(self.board_dir,board)
+                with open(file_name,'r') as file_obj:
+                    board_details[board] = pickle.load(file_obj)
+                    file_obj.close()
 
+        except Exception as e:
+            print str(e)
+
+        return board_details
+
+    def get_cards(self):
+        "Get the cards"
+        organizations = []
+        members = {}
+        card_details = {}
+        try:
+            board_details = self.get_boards()
+            for boardid,value in board_details.iteritems():
+                cards_path = os.path.join(self.card_dir,boardid)
+                cards = os.listdir(cards_path)
+                for card in cards:
+                    card_file_path = os.path.join(cards_path,card)
+                    with open(card_file_path,'r') as file_obj:
+                        card_details['card'] = pickle.load(file_obj)
+                        file_obj.close()
+                    
+                    #membersid = card_details['card']['idMembers']
+                    #print membersid
+                    #for id in  membersid:
+                        #print id
+                        #url = "https://api.trello.com/1/members/" + id 
+                        #get_members = requests.get(url=url,params=self.auth_details)
+                        #print json.dumps(get_members.json(),indent=4)
+                        
+        except Exception as e:
+            print str(e)
+
+        return card_details
+
+
+    def get_last_board(self,org):
+        "Get the last board"
+        #sprint self.boards[-1]
+        last_board = None
+        self.get_all_organizations()
+        for name,value in self.organization_details.iteritems():
+            if name == org:
+                org_id = value['id']
+        for i in range(len(self.boards),-1,-1):
+            url = self.url + 'boards/' + self.boards[i-1]
+            get_board = self.get(url=url,params=self.auth_details)
+            #print json.dumps(get_board.json(),indent=4)
+            if get_board.json()['idOrganization'] == org_id:
+                last_board = get_board.json()
+                break
+        #url = self.url + 'organizations/'+ org_id + '/boards'
+        #print url
+        #get_last_board_details = self.get(url = url,params=self.auth_details)
+        #print json.dumps(get_last_board_details.json(),indent=4)
+        #members_url = self.url+ 'boards/' + self.boards[-2] + '/members'
+        #get_members = self.get(url=members_url,params=self.auth_details)
+        #print json.dumps(get_members.json(),indent=4)
+        #print self.organizations
+        #print self.organizations
+        #for id in self.organizations:
+            #url = self.url + 'organizations/' + id
+            #get_org_details = self.get(url=url,params=self.auth_details)
+            #print json.dumps(get_org_details.json(),indent=4)
+        return last_board
+
+    def get_all_organizations(self):
+        "Get all the organizations"
+        organization_details = {}
+        organization_names = []
+        try:
+            for id in self.organizations:
+                url = self.url + 'organizations/' + id
+                get_org_details = self.get(url=url,params=self.auth_details)
+                organization_details[get_org_details.json()['name']] = get_org_details.json()
+                organization_names.append(get_org_details.json()['name'])
+            self.organization_details = organization_details
+        except Exception as e:
+            print str(e)
+
+        return organization_names
+
+
+    def get_members_for_last_board(self,org_option):
+        "Get members for the last board"
+        last_board = self.get_last_board(org_option)
+        url = self.url + 'boards/' + last_board['id'] + '/members'
+        get_members = self.get(url=url,params=self.auth_details)
+        return get_members.json()
+
+    def return_name(self):
+        "return the account name"
+
+        return self.fullname
+
+    def create_new_board(self,org_id,name):
+
+        url = self.url + '/boards'
+        self.auth_details['name'] = name
+        self.auth_details['idOrganization'] = org_id 
+        create_board = requests.post(url=url,params=self.auth_details)
+        print create_board.status_code
+        del self.auth_details['name']
+        del self.auth_details['idOrganization']
+
+    def add_members(self,board,members):
+
+        self.auth_details['type'] = 'normal'
+        for id in members:
+            url = self.url + 'boards/' + board + '/members/' + id 
+            print url 
+            members_add = requests.put(url=url,params=self.auth_details)
+            print members_add.status_code 
+        del self.auth_details['type'] 
+        
 
